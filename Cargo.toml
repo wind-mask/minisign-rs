@@ -1,0 +1,32 @@
+[package]
+name = "mini-sign"
+version = "0.1.0"
+edition = "2021"
+authors = ["wind_mask"]
+description = "A crate for minisign in rust."
+license = "MIT"
+readme = "README.md"
+categories = ["cryptography", "security"]
+keywords = ["minisign", "sign", "verify", "crypto", "signature"]
+repository = "https://github.com/wind-mask/minisign-rs"
+homepage = "https://github.com/wind-mask/minisign-rs"
+[dependencies]
+base64 = "0.22.1"
+blake2 = "0.10.6"
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+scrypt = "0.11.0"
+zeroize = { version = "1.8.1", features = ["zeroize_derive"] }
+
+[profile.dev]
+lto = "thin"
+opt-level = 3
+[profile.test]
+lto = "thin"
+opt-level = 3
+[profile.bench]
+lto = true
+opt-level = 3
+[profile.release]
+lto = true
+opt-level = 3
+panic = "abort"

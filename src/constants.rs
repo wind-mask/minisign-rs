@@ -1,0 +1,15 @@
+pub(crate) const CHK_ALG: [u8; 2] = *b"B2";
+pub(crate) const ALG_SIZE: usize = 2;
+pub(crate) const KDF_LIMIT_SIZE: usize = 8;
+pub(crate) const CHK_SIZE: usize = 32;
+pub(crate) const KDF_ALG: [u8; 2] = *b"Sc";
+pub(crate) const KDF_SALT_SIZE: usize = 32;
+pub(crate) const KID_SIZE: usize = 8;
+pub(crate) const N_LOG2_MAX: u8 = 20;
+pub(crate) const KEYNUM_SK_SIZE: usize = 104;
+pub(crate) const SIGALG_PREHASHED: [u8; 2] = *b"ED";
+pub(crate) const KEY_SIG_ALG: [u8; 2] = *b"Ed";
+pub(crate) const COMPONENT_SIZE: usize = 32;
+pub(crate) const SIG_SIZE: usize = 64;
+pub(crate) const MEMLIMIT: u64 = 33_554_432;
+pub(crate) const OPSLIMIT: u64 = 1_048_576;
