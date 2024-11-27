@@ -1,4 +1,6 @@
-
+![CI status](https://github.com/wind-mask/minisign-rs/workflows/Rust/badge.svg)
+[![Last version](https://img.shields.io/crates/v/mini-sign.svg)](https://crates.io/crates/mini-sign)
+[![Documentation](https://docs.rs/mini-sign/badge.svg)](https://docs.rs/minisign)
 
 # minisign-rs
 
