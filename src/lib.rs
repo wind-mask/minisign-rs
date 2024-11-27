@@ -162,27 +162,17 @@ mod tests {
             Some("sk untrusted comment"),
         )
         .unwrap();
-        let mut pk_file = fs::File::create("./test.pub").unwrap();
-        let mut sk_file = fs::File::create("./test.sec").unwrap();
-        pk_file
-            .write_all(public_key_box.to_string().as_bytes())
-            .unwrap();
-        sk_file
-            .write_all(secret_key_box.to_string().as_bytes())
-            .unwrap();
-        let file = fs::File::open("./test").unwrap();
+        let msg = "test";
         let sig_box = sign(
             Some(&public_key_box),
             &secret_key_box,
             Some(b"password"),
-            file,
+            msg.as_bytes(),
             Some("trusted comment"),
             Some("untrusted comment"),
         )
         .unwrap();
-        let mut sig_file = fs::File::create("./test.minisig").unwrap();
-        sig_file.write_all(sig_box.to_string().as_bytes()).unwrap();
-        let v = verify(&public_key_box, &sig_box, fs::File::open("./test").unwrap()).unwrap();
+        let v = verify(&public_key_box, &sig_box, msg.as_bytes()).unwrap();
         assert_eq!(v, true);
     }
 }
