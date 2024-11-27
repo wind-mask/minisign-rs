@@ -4,14 +4,31 @@ use crate::{errors::Result, PublicKeyBox, SecretKeyBox};
 
 /// A `KeyPairBox` represents a minisign key pair.
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyPairBox<'p, 's> {
     /// The public key box.
     pub public_key_box: PublicKeyBox<'p>,
     /// The secret key box.
     pub secret_key_box: SecretKeyBox<'s>,
 }
+impl std::fmt::Display for KeyPairBox<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\n{}", self.public_key_box, self.secret_key_box)
+    }
+}
 impl<'p, 's> KeyPairBox<'p, 's> {
+    /// Generate a new key pair.
+    ///
+    /// # Arguments
+    /// * `password` - The password to encrypt the secret key.
+    /// * `pk_comment` - The comment for the public key.
+    /// * `sk_comment` - The comment for the secret key.
+    ///
+    /// # Returns
+    /// A new key pair.
+    ///
+    /// # Errors
+    /// * `ErrorKind::Kdf` - rng error
     pub fn generate(
         password: Option<&[u8]>,
         pk_comment: Option<&'p str>,

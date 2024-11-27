@@ -17,7 +17,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 /// A `SecretKeyBox` represents a minisign secret key.
 ///
 /// also can be output to a string and parse from a str.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretKeyBox<'s> {
     pub(crate) untrusted_comment: Option<&'s str>,
     pub(crate) secret_key: SecretKey,
@@ -191,7 +191,7 @@ fn test_parse_secret_key() {
     assert_eq!(file, sk.to_string());
 }
 /// A `SecretKey` is used to sign messages.
-#[derive(Clone, Debug, ZeroizeOnDrop)]
+#[derive(Clone, Debug, ZeroizeOnDrop, PartialEq, Eq)]
 pub(crate) struct SecretKey {
     pub sig_alg: [u8; ALG_SIZE],
     kdf_alg: [u8; ALG_SIZE],

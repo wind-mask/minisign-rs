@@ -8,7 +8,7 @@ use ed25519_dalek::ed25519::{self, ComponentBytes};
 /// A `PublicKeyBox` represents a minisign public key.
 ///
 /// also can be output to a string and parse from a str.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicKeyBox<'s> {
     pub(crate) untrusted_comment: Option<&'s str>,
     pub(crate) public_key: PublicKey,
@@ -135,7 +135,7 @@ fn test_parse_public_key() {
     assert_eq!(file, pk.to_string());
 }
 /// A `PublicKey` is used to verify signatures.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct PublicKey {
     pub sig_alg: [u8; 2],
     pub key_id: [u8; 8],
@@ -150,7 +150,7 @@ impl PublicKey {
         }
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct RawPk(pub ComponentBytes);
 impl RawPk {
     pub fn new(key: ComponentBytes) -> Self {

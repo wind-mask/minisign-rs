@@ -10,6 +10,7 @@ categories = ["cryptography", "security"]
 keywords = ["minisign", "sign", "verify", "crypto", "signature"]
 repository = "https://github.com/wind-mask/minisign-rs"
 homepage = "https://github.com/wind-mask/minisign-rs"
+exclude=[".github/*"]
 [dependencies]
 base64 = "0.22.1"
 blake2 = "0.10.6"
