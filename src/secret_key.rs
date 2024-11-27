@@ -66,10 +66,10 @@ impl<'s> SecretKeyBox<'s> {
         rand_core::OsRng.try_fill_bytes(&mut dest)?;
 
         let mut hash = Blake2b256::new();
-        hash.update(&KEY_SIG_ALG);
+        hash.update(KEY_SIG_ALG);
         hash.update(kid);
-        hash.update(&sk);
-        hash.update(&pk);
+        hash.update(sk);
+        hash.update(pk);
         let mut kdf_buf = kdf(password, &dest, OPSLIMIT, MEMLIMIT)?;
         let keynum_sk = KeynumSK {
             key_id: *kid,
@@ -280,7 +280,7 @@ impl SecretKey {
         let keynum_sk = KeynumSK::from_bytes(&self.keynum_sk, stream);
 
         let mut hash = Blake2b256::new();
-        hash.update(&self.sig_alg);
+        hash.update(self.sig_alg);
         hash.update(&keynum_sk.key_id);
         hash.update(&keynum_sk.sec_key.0);
         hash.update(&keynum_sk.pub_key);

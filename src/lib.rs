@@ -91,7 +91,7 @@ where
     let signature = Signature::new(SIGALG_PREHASHED, keynum_sk.key_id, sig, global_sig);
     let sig_box = SignatureBox::new(untrusted_comment, trusted_comment, signature);
     if let Some(pk) = pk {
-        verify_prehashed(&pk, &sig_box, &prehashed)?;
+        verify_prehashed(pk, &sig_box, &prehashed)?;
     }
     Ok(sig_box)
 }
@@ -148,7 +148,6 @@ fn verify_prehashed(
 }
 #[cfg(test)]
 mod tests {
-    use std::{fs, io::Write};
 
     use super::*;
     #[test]
