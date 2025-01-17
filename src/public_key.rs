@@ -37,6 +37,31 @@ impl<'s> PublicKeyBox<'s> {
     pub fn from_str(s: &'s str) -> Result<Self> {
         parse_public_key(s)
     }
+    /// Get the public key from a raw string,without untrusted comment.
+    /// only one line.
+    pub fn from_raw_str(s: &'s str) -> Result<Self> {
+        let public_key = s.trim();
+        let decoder = base64::engine::general_purpose::STANDARD;
+        let pk_format = decoder
+            .decode(public_key.as_bytes())
+            .map_err(|e| SError::new(crate::ErrorKind::PublicKey, e))?;
+        if pk_format.len() != ALG_SIZE + KID_SIZE + COMPONENT_SIZE {
+            return Err(SError::new(
+                crate::ErrorKind::PublicKey,
+                "invalid public key length",
+            ));
+        }
+        let pk_sig_alg = &pk_format[..ALG_SIZE];
+        let pk_key_id = &pk_format[ALG_SIZE..ALG_SIZE + KID_SIZE];
+        let pk_key = &pk_format[ALG_SIZE + KID_SIZE..];
+        let pk = RawPk::new(pk_key.try_into().unwrap());
+        let public_key = PublicKey::new(
+            pk_sig_alg.try_into().unwrap(),
+            pk_key_id.try_into().unwrap(),
+            pk,
+        );
+        Ok(PublicKeyBox::new(None, public_key))
+    }
     /// Get the untrusted comment.
     pub fn untrusted_comment(&self) -> Option<&'s str> {
         self.untrusted_comment
@@ -93,6 +118,28 @@ impl Display for PublicKeyBox<'_> {
         write!(f, "{}", s)
     }
 }
+fn parse_raw_public_key(public_key: &str) -> Result<PublicKey> {
+    let decoder = base64::engine::general_purpose::STANDARD;
+    let pk_format = decoder
+        .decode(public_key.as_bytes())
+        .map_err(|e| SError::new(crate::ErrorKind::PublicKey, e))?;
+    if pk_format.len() != ALG_SIZE + KID_SIZE + COMPONENT_SIZE {
+        return Err(SError::new(
+            crate::ErrorKind::PublicKey,
+            "invalid public key length",
+        ));
+    }
+    let pk_sig_alg = &pk_format[..ALG_SIZE];
+    let pk_key_id = &pk_format[ALG_SIZE..ALG_SIZE + KID_SIZE];
+    let pk_key = &pk_format[ALG_SIZE + KID_SIZE..];
+    let pk = RawPk::new(pk_key.try_into().unwrap());
+    let public_key = PublicKey::new(
+        pk_sig_alg.try_into().unwrap(),
+        pk_key_id.try_into().unwrap(),
+        pk,
+    );
+    Ok(public_key)
+}
 fn parse_public_key(s: &str) -> Result<PublicKeyBox> {
     let mut lines = s.lines();
     if let Some(c) = lines.next() {
@@ -100,26 +147,10 @@ fn parse_public_key(s: &str) -> Result<PublicKeyBox> {
         let public_key = lines
             .next()
             .ok_or_else(|| SError::new(crate::ErrorKind::PublicKey, "missing public key"))?;
-        let decoder = base64::engine::general_purpose::STANDARD;
-        let pk_format = decoder
-            .decode(public_key.as_bytes())
-            .map_err(|e| SError::new(crate::ErrorKind::PublicKey, e))?;
-        if pk_format.len() != ALG_SIZE + KID_SIZE + COMPONENT_SIZE {
-            return Err(SError::new(
-                crate::ErrorKind::PublicKey,
-                "invalid public key length",
-            ));
-        }
-        let pk_sig_alg = &pk_format[..ALG_SIZE];
-        let pk_key_id = &pk_format[ALG_SIZE..ALG_SIZE + KID_SIZE];
-        let pk_key = &pk_format[ALG_SIZE + KID_SIZE..];
-        let pk = RawPk::new(pk_key.try_into().unwrap());
-        let public_key = PublicKey::new(
-            pk_sig_alg.try_into().unwrap(),
-            pk_key_id.try_into().unwrap(),
-            pk,
-        );
-        Ok(PublicKeyBox::new(untrusted_comment, public_key))
+        Ok(PublicKeyBox::new(
+            untrusted_comment,
+            parse_raw_public_key(public_key)?,
+        ))
     } else {
         Err(SError::new(crate::ErrorKind::PublicKey, "empty public key"))
     }

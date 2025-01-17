@@ -100,25 +100,10 @@ impl<'s> SecretKeyBox<'s> {
     pub(crate) fn xor_keynum_sk(&self, password: Option<&[u8]>) -> Result<KeynumSK> {
         self.secret_key.xor_keynum_sk(password)
     }
-    /// Parse a `SecretKeyBox` from str.
-    ///
-    /// as it store in a file.
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &'s str) -> Result<Self> {
-        parse_secret_key(s)
-    }
-    /// Get the untrusted comment.
-    pub fn untrusted_comment(&self) -> Option<&'s str> {
-        self.untrusted_comment
-    }
-}
-fn parse_secret_key(s: &str) -> Result<SecretKeyBox> {
-    let mut lines = s.lines();
-    if let Some(c) = lines.next() {
-        let untrusted_comment = c.strip_prefix("untrusted comment: ");
-        let secret_key = lines
-            .next()
-            .ok_or_else(|| SError::new(crate::ErrorKind::SecretKey, "missing secret key"))?;
+    /// Get the public key from the secret key, without untrusted comment.
+    /// only one line.
+    pub fn from_raw_str(s: &'s str) -> Result<Self> {
+        let secret_key = s.trim();
         let decoder = base64::engine::general_purpose::STANDARD;
         let sk_format = decoder
             .decode(secret_key.as_bytes())
@@ -171,7 +156,82 @@ fn parse_secret_key(s: &str) -> Result<SecretKeyBox> {
                 .try_into()
                 .unwrap(),
         };
-        Ok(SecretKeyBox::new(untrusted_comment, secret_key))
+        Ok(SecretKeyBox::new(None, secret_key))
+    }
+    /// Parse a `SecretKeyBox` from str.
+    ///
+    /// as it store in a file.
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_str(s: &'s str) -> Result<Self> {
+        parse_secret_key(s)
+    }
+    /// Get the untrusted comment.
+    pub fn untrusted_comment(&self) -> Option<&'s str> {
+        self.untrusted_comment
+    }
+}
+fn parse_raw_secret_key(secret_key: &str) -> Result<SecretKey> {
+    let decoder = base64::engine::general_purpose::STANDARD;
+    let sk_format = decoder
+        .decode(secret_key.as_bytes())
+        .map_err(|e| SError::new(crate::ErrorKind::SecretKey, e))?;
+    if sk_format.len()
+        != ALG_SIZE
+            + ALG_SIZE
+            + ALG_SIZE
+            + KDF_SALT_SIZE
+            + KDF_LIMIT_SIZE
+            + KDF_LIMIT_SIZE
+            + KEYNUM_SK_SIZE
+    {
+        return Err(SError::new(
+            crate::ErrorKind::SecretKey,
+            "invalid secret key length",
+        ));
+    }
+    let sig_alg = &sk_format[..ALG_SIZE];
+    let kdf_alg = &sk_format[ALG_SIZE..ALG_SIZE + ALG_SIZE];
+    let cksum_alg = &sk_format[ALG_SIZE + ALG_SIZE..ALG_SIZE + ALG_SIZE + ALG_SIZE];
+    let kdf_salt =
+        &sk_format[ALG_SIZE + ALG_SIZE + ALG_SIZE..ALG_SIZE + ALG_SIZE + ALG_SIZE + KDF_SALT_SIZE];
+    let kdf_opslimit = u64::from_le_bytes(
+        sk_format[ALG_SIZE + ALG_SIZE + ALG_SIZE + KDF_SALT_SIZE
+            ..ALG_SIZE + ALG_SIZE + ALG_SIZE + KDF_SALT_SIZE + KDF_LIMIT_SIZE]
+            .try_into()
+            .unwrap(),
+    );
+    let kdf_memlimit = u64::from_le_bytes(
+        sk_format[ALG_SIZE + ALG_SIZE + ALG_SIZE + KDF_SALT_SIZE + KDF_LIMIT_SIZE
+            ..ALG_SIZE + ALG_SIZE + ALG_SIZE + KDF_SALT_SIZE + KDF_LIMIT_SIZE + KDF_LIMIT_SIZE]
+            .try_into()
+            .unwrap(),
+    );
+
+    let secret_key = SecretKey {
+        sig_alg: sig_alg.try_into().unwrap(),
+        kdf_alg: kdf_alg.try_into().unwrap(),
+        cksum_alg: cksum_alg.try_into().unwrap(),
+        kdf_salt: kdf_salt.try_into().unwrap(),
+        kdf_opslimit,
+        kdf_memlimit,
+        keynum_sk: sk_format
+            [ALG_SIZE + ALG_SIZE + ALG_SIZE + KDF_SALT_SIZE + KDF_LIMIT_SIZE + KDF_LIMIT_SIZE..]
+            .try_into()
+            .unwrap(),
+    };
+    Ok(secret_key)
+}
+fn parse_secret_key(s: &str) -> Result<SecretKeyBox> {
+    let mut lines = s.lines();
+    if let Some(c) = lines.next() {
+        let untrusted_comment = c.strip_prefix("untrusted comment: ");
+        let secret_key = lines
+            .next()
+            .ok_or_else(|| SError::new(crate::ErrorKind::SecretKey, "missing secret key"))?;
+        Ok(SecretKeyBox::new(
+            untrusted_comment,
+            parse_raw_secret_key(secret_key)?,
+        ))
     } else {
         Err(SError::new(
             crate::ErrorKind::SecretKey,
