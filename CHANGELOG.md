@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased]
+
+### ⚙️ Miscellaneous Tasks
+
+- 🎡 add release-plz and git-cliff
+
 ## [0.1.1] - 2025-01-17
 
 ### 🚀 Features
