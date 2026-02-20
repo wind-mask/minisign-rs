@@ -109,12 +109,19 @@ fn test_parse_signature() {
     let sig = parse_signature(&file).unwrap();
     assert_eq!(file, sig.to_string());
 }
+fn sanitize_comment(comment: Option<&str>) -> Option<String> {
+    comment.map(|c| {
+        c.chars()
+            .filter(|c| !c.is_control())
+            .collect::<String>()
+    })
+}
 impl Display for SignatureBox<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();
         s.push_str("untrusted comment: ");
-        if let Some(c) = self.untrusted_comment {
-            s.push_str(c);
+        if let Some(c) = sanitize_comment(self.untrusted_comment) {
+            s.push_str(&c);
         }
         s.push('\n');
         let encoder = base64::engine::general_purpose::STANDARD;
@@ -126,8 +133,8 @@ impl Display for SignatureBox<'_> {
         s.push_str(&sig);
         s.push('\n');
         s.push_str("trusted comment: ");
-        if let Some(c) = self.trusted_comment {
-            s.push_str(c);
+        if let Some(c) = sanitize_comment(self.trusted_comment) {
+            s.push_str(&c);
         }
         s.push('\n');
         let global_sig = encoder.encode(self.signature.global_sig.to_bytes());

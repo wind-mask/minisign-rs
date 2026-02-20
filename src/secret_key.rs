@@ -1,7 +1,9 @@
 use std::fmt::Display;
 
 use crate::{
-    util::raw_scrypt_params, Result, SError, ALG_SIZE, CHK_ALG, CHK_SIZE, COMPONENT_SIZE, KDF_ALG,
+    public_key::{PublicKey, RawPk},
+    util::raw_scrypt_params,
+    PublicKeyBox, Result, SError, ALG_SIZE, CHK_ALG, CHK_SIZE, COMPONENT_SIZE, KDF_ALG,
     KDF_LIMIT_SIZE, KDF_SALT_SIZE, KEYNUM_SK_SIZE, KEY_SIG_ALG, KID_SIZE, MEMLIMIT, N_LOG2_MAX,
     OPSLIMIT,
 };
@@ -169,7 +171,27 @@ impl<'s> SecretKeyBox<'s> {
     pub fn untrusted_comment(&self) -> Option<&'s str> {
         self.untrusted_comment
     }
+    /// Get public key from the secret key.
+    pub fn public_key(&self, password: Option<&[u8]>) -> Result<PublicKeyBox<'s>> {
+        pub_key_from_sec_key(self, password)
+    }
 }
+fn pub_key_from_sec_key<'s>(
+    sec_key: &SecretKeyBox<'s>,
+    password: Option<&[u8]>,
+) -> Result<PublicKeyBox<'s>> {
+    let keynum_sk = sec_key.xor_keynum_sk(password)?;
+    let pk_box = PublicKeyBox::new(
+        None,
+        PublicKey::new(
+            sec_key.secret_key.sig_alg,
+            keynum_sk.key_id,
+            RawPk(keynum_sk.pub_key),
+        ),
+    );
+    Ok(pk_box)
+}
+
 fn parse_raw_secret_key(secret_key: &str) -> Result<SecretKey> {
     let decoder = base64::engine::general_purpose::STANDARD;
     let sk_format = decoder

@@ -1,7 +1,8 @@
-use std::fmt::Display;
+use std::{fmt::Display, io::Read};
 
 use crate::{
-    errors::Result, signature::Signature, SError, ALG_SIZE, COMPONENT_SIZE, KEY_SIG_ALG, KID_SIZE,
+    errors::Result, prehash, signature::Signature, ErrorKind, SError, SignatureBox, ALG_SIZE,
+    COMPONENT_SIZE, KEY_SIG_ALG, KID_SIZE,
 };
 use base64::Engine;
 use ed25519_dalek::ed25519::{self, ComponentBytes};
@@ -66,7 +67,7 @@ impl<'s> PublicKeyBox<'s> {
     pub fn untrusted_comment(&self) -> Option<&'s str> {
         self.untrusted_comment
     }
-    pub(crate) fn verify(
+    pub(crate) fn verify_mini(
         &self,
         msg: &[u8],
         sig: &Signature,
@@ -98,7 +99,63 @@ impl<'s> PublicKeyBox<'s> {
         }
         Ok(true)
     }
+    /// Get the key id of the public key.
+    pub fn key_id(&self) -> &[u8; 8] {
+        &self.public_key.key_id
+    }
+    /// Get the signature algorithm of the public key.
+    pub fn sig_alg(&self) -> &[u8; 2] {
+        &self.public_key.sig_alg
+    }
+    /// Verify a signature with the public key.
+    ///
+    /// # Arguments
+    /// * `signature_box` - The signature to verify
+    /// * `data_reader` - The data to verify
+    /// # Returns
+    /// A Result containing a boolean indicating whether the signature is valid
+    /// # Errors
+    /// * `ErrorKind::Io` - If there is an error reading the data
+    /// * `ErrorKind::PublicKey` - If the public key is invalid or not matching the signature
+    /// * `ErrorKind::PrehashedMismatch` - If the signature is not prehashed
+    pub fn verify<R>(&self, signature_box: &SignatureBox, mut data_reader: R) -> Result<bool>
+    where
+        R: Read,
+    {
+        let prehashed = prehash(&mut data_reader)?;
+        verify_prehashed(self, signature_box, &prehashed)
+    }
 }
+pub(crate) fn verify_prehashed(
+    pk: &PublicKeyBox,
+    signature_box: &SignatureBox,
+    prehashed: &[u8],
+) -> Result<bool> {
+    if !signature_box.is_prehashed() {
+        return Err(SError::new(
+            ErrorKind::PrehashedMismatch,
+            "SignatureBox is not prehashed",
+        ));
+    }
+    if !pk.self_verify()? {
+        return Err(SError::new(
+            ErrorKind::PublicKey,
+            "public key self verification failed",
+        ));
+    }
+    if pk.public_key.key_id != *signature_box.key_id() {
+        return Err(SError::new(
+            ErrorKind::PublicKey,
+            "public key key_id mismatch",
+        ));
+    }
+    pk.verify_mini(
+        prehashed,
+        &signature_box.signature,
+        signature_box.trusted_comment(),
+    )
+}
+
 impl Display for PublicKeyBox<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();

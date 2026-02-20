@@ -17,6 +17,8 @@ mod public_key;
 mod secret_key;
 mod signature;
 pub use signature::SignatureBox;
+
+use crate::public_key::verify_prehashed;
 mod util;
 fn prehash<R>(data_reader: &mut R) -> Result<Vec<u8>>
 where
@@ -59,6 +61,7 @@ pub fn pub_key_from_sec_key<'s>(
     );
     Ok(pk_box)
 }
+
 /// minisign some data
 /// # Arguments
 /// * `pk` - The public key to verify the signature(optional)
@@ -119,35 +122,7 @@ where
     let prehashed = prehash(&mut data_reader)?;
     verify_prehashed(pk, signature_box, &prehashed)
 }
-fn verify_prehashed(
-    pk: &PublicKeyBox,
-    signature_box: &SignatureBox,
-    prehashed: &[u8],
-) -> Result<bool> {
-    if !signature_box.is_prehashed() {
-        return Err(SError::new(
-            ErrorKind::PrehashedMismatch,
-            "SignatureBox is not prehashed",
-        ));
-    }
-    if !pk.self_verify()? {
-        return Err(SError::new(
-            ErrorKind::PublicKey,
-            "public key self verification failed",
-        ));
-    }
-    if pk.public_key.key_id != *signature_box.key_id() {
-        return Err(SError::new(
-            ErrorKind::PublicKey,
-            "public key key_id mismatch",
-        ));
-    }
-    pk.verify(
-        prehashed,
-        &signature_box.signature,
-        signature_box.trusted_comment(),
-    )
-}
+
 #[cfg(test)]
 mod tests {
 
