@@ -12,6 +12,11 @@ Low-level library for the minisign system, designed to be used in CI/CD pipeline
 ## Example
 
 ``` rust
+use mini_sign::{
+    KeyPairBox,
+    sign,
+    verify,
+};
 let KeyPairBox {
     public_key_box,
     secret_key_box,
