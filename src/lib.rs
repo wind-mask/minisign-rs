@@ -1,3 +1,5 @@
+//
+#![doc = include_str!("../README.md")]
 mod constants;
 use blake2::Digest;
 use std::io::Read;
@@ -32,11 +34,11 @@ where
     Ok(hash.finalize().to_vec())
 }
 /// Create a new public key from a string in the minisign format pub key file
-pub fn pub_key_from_str(s: &str) -> Result<PublicKeyBox> {
+pub fn pub_key_from_str(s: &str) -> Result<PublicKeyBox<'_>> {
     PublicKeyBox::from_str(s)
 }
 /// Create a new secret key from a string in the minisign format key file
-pub fn sec_key_from_str(s: &str) -> Result<SecretKeyBox> {
+pub fn sec_key_from_str(s: &str) -> Result<SecretKeyBox<'_>> {
     SecretKeyBox::from_str(s)
 }
 /// Create a new public key from a secret key

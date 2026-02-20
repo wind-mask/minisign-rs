@@ -140,7 +140,7 @@ fn parse_raw_public_key(public_key: &str) -> Result<PublicKey> {
     );
     Ok(public_key)
 }
-fn parse_public_key(s: &str) -> Result<PublicKeyBox> {
+fn parse_public_key(s: &str) -> Result<PublicKeyBox<'_>> {
     let mut lines = s.lines();
     if let Some(c) = lines.next() {
         let untrusted_comment = c.strip_prefix("untrusted comment: ");

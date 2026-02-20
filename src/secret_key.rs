@@ -221,7 +221,7 @@ fn parse_raw_secret_key(secret_key: &str) -> Result<SecretKey> {
     };
     Ok(secret_key)
 }
-fn parse_secret_key(s: &str) -> Result<SecretKeyBox> {
+fn parse_secret_key(s: &str) -> Result<SecretKeyBox<'_>> {
     let mut lines = s.lines();
     if let Some(c) = lines.next() {
         let untrusted_comment = c.strip_prefix("untrusted comment: ");

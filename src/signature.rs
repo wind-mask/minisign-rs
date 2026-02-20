@@ -20,7 +20,7 @@ pub struct SignatureBox<'s> {
     pub(crate) trusted_comment: Option<&'s str>,
     pub(crate) signature: Signature,
 }
-fn parse_signature(s: &str) -> Result<SignatureBox> {
+fn parse_signature(s: &'_ str) -> Result<SignatureBox<'_>> {
     let mut lines = s.lines();
     let untrusted_comment = if let Some(c) = lines.next() {
         if let Some(uc) = c.strip_prefix("untrusted comment: ") {
@@ -162,7 +162,7 @@ impl<'s> SignatureBox<'s> {
         &self.signature.key_id
     }
     #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &str) -> Result<SignatureBox> {
+    pub fn from_str(s: &str) -> Result<SignatureBox<'_>> {
         parse_signature(s)
     }
 }
