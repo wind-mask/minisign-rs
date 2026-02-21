@@ -1,6 +1,6 @@
 [package]
 name = "mini-sign"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 authors = ["wind_mask"]
 description = "A crate for minisign in rust."

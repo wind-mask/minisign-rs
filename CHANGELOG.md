@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2026-02-21
+
+### 💼 Other
+
+- Potential fix for code scanning alert no. 1: Workflow does not contain permissions
+- 🔒️ security(zeroize-buf): zeroize some sec buf
+
+### 📚 Documentation
+
+- 📝 docs(README): fix doc test
+
 ## [0.1.2] - 2026-02-20
 
 ### 🚀 Features
