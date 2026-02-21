@@ -19,10 +19,11 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 /// A `SecretKeyBox` represents a minisign secret key.
 ///
 /// also can be output to a string and parse from a str.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, ZeroizeOnDrop)]
 pub struct SecretKeyBox<'s> {
+    #[zeroize(skip)]
     pub(crate) untrusted_comment: Option<&'s str>,
-    pub(crate) secret_key: SecretKey,
+     secret_key: SecretKey,
 }
 impl Display for SecretKeyBox<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -41,8 +42,10 @@ impl Display for SecretKeyBox<'_> {
         sk_format.extend_from_slice(&self.secret_key.kdf_opslimit.to_le_bytes());
         sk_format.extend_from_slice(&self.secret_key.kdf_memlimit.to_le_bytes());
         sk_format.extend_from_slice(&self.secret_key.keynum_sk);
-        let sk = encoder.encode(&sk_format);
+        let mut sk = encoder.encode(&sk_format);
+        sk_format.zeroize();
         s.push_str(&sk);
+        sk.zeroize();
         s.push('\n');
 
         write!(f, "{}", s)
@@ -55,6 +58,9 @@ impl<'s> SecretKeyBox<'s> {
             untrusted_comment,
             secret_key,
         }
+    }
+    pub(crate) fn sig_alg(&self) -> [u8; ALG_SIZE] {
+        self.secret_key.sig_alg
     }
     pub fn from_signing_key(
         signing_key: ed25519_dalek::SigningKey,
@@ -89,7 +95,7 @@ impl<'s> SecretKeyBox<'s> {
             kdf_memlimit: MEMLIMIT,
             keynum_sk: kdf_buf,
         };
-
+        kdf_buf.zeroize();
         Ok(Self::new(untrusted_comment, secret_key))
     }
     pub(crate) fn sign(
@@ -107,7 +113,7 @@ impl<'s> SecretKeyBox<'s> {
     pub fn from_raw_str(s: &'s str) -> Result<Self> {
         let secret_key = s.trim();
         let decoder = base64::engine::general_purpose::STANDARD;
-        let sk_format = decoder
+        let mut sk_format = decoder
             .decode(secret_key.as_bytes())
             .map_err(|e| SError::new(crate::ErrorKind::SecretKey, e))?;
         if sk_format.len()
@@ -158,6 +164,7 @@ impl<'s> SecretKeyBox<'s> {
                 .try_into()
                 .unwrap(),
         };
+        sk_format.zeroize();
         Ok(SecretKeyBox::new(None, secret_key))
     }
     /// Parse a `SecretKeyBox` from str.
@@ -194,7 +201,7 @@ fn pub_key_from_sec_key<'s>(
 
 fn parse_raw_secret_key(secret_key: &str) -> Result<SecretKey> {
     let decoder = base64::engine::general_purpose::STANDARD;
-    let sk_format = decoder
+    let mut sk_format = decoder
         .decode(secret_key.as_bytes())
         .map_err(|e| SError::new(crate::ErrorKind::SecretKey, e))?;
     if sk_format.len()
@@ -241,6 +248,7 @@ fn parse_raw_secret_key(secret_key: &str) -> Result<SecretKey> {
             .try_into()
             .unwrap(),
     };
+    sk_format.zeroize();
     Ok(secret_key)
 }
 fn parse_secret_key(s: &str) -> Result<SecretKeyBox<'_>> {
@@ -275,7 +283,7 @@ fn test_parse_secret_key() {
 /// A `SecretKey` is used to sign messages.
 #[derive(Clone, Debug, ZeroizeOnDrop, PartialEq, Eq)]
 pub(crate) struct SecretKey {
-    pub sig_alg: [u8; ALG_SIZE],
+    pub(crate) sig_alg: [u8; ALG_SIZE],
     kdf_alg: [u8; ALG_SIZE],
     cksum_alg: [u8; ALG_SIZE],
     kdf_salt: [u8; KDF_SALT_SIZE],
@@ -284,10 +292,10 @@ pub(crate) struct SecretKey {
     keynum_sk: [u8; KEYNUM_SK_SIZE],
 }
 #[derive(Clone, Debug, ZeroizeOnDrop)]
-pub struct KeynumSK {
+pub(crate) struct KeynumSK {
     pub(crate) key_id: [u8; KID_SIZE],
     sec_key: RawSk,
-    pub pub_key: ComponentBytes,
+    pub(crate) pub_key: ComponentBytes,
     checksum: [u8; CHK_SIZE],
 }
 impl KeynumSK {
@@ -307,7 +315,6 @@ impl KeynumSK {
         kdf_buf
     }
     fn from_bytes(keynum_sk: &[u8; KEYNUM_SK_SIZE], mut kdf_buf: [u8; KEYNUM_SK_SIZE]) -> Self {
-        // let mut kdf_buf = [0u8; KEYNUM_SK_SIZE];
         for i in 0..KEYNUM_SK_SIZE {
             kdf_buf[i] ^= keynum_sk[i];
         }

@@ -54,7 +54,7 @@ pub fn pub_key_from_sec_key<'s>(
     let pk_box = PublicKeyBox::new(
         None,
         PublicKey::new(
-            sec_key.secret_key.sig_alg,
+            sec_key.sig_alg(),
             keynum_sk.key_id,
             RawPk(keynum_sk.pub_key),
         ),
