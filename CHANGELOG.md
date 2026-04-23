@@ -2,17 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.4] - 2026-04-23
+
+### 🐛 Bug Fixes
+
+- Harden minisign parsing and key compatibility
+
+### 🧪 Testing
+
+- Add official minisign compatibility coverage
 ## [0.1.3] - 2026-02-21
 
 ### 💼 Other
 
 - Potential fix for code scanning alert no. 1: Workflow does not contain permissions
+
+Co-authored-by: Copilot Autofix powered by AI <62310815+github-advanced-security[bot]@users.noreply.github.com>
 - 🔒️ security(zeroize-buf): zeroize some sec buf
 
 ### 📚 Documentation
 
 - 📝 docs(README): fix doc test
 
+### ⚙️ Miscellaneous Tasks
+
+- Release v0.1.3
 ## [0.1.2] - 2026-02-20
 
 ### 🚀 Features
@@ -40,22 +54,37 @@ All notable changes to this project will be documented in this file.
 - 🎡 add CHANGELOG.md
 ## [0.1.1] - 2025-01-17
 
+### 🚀 Features
+
+- 🎸 add api:form one line key raw str
+
 ### 💼 Other
 
 - Update README.md
-- 🎸 add api:form one line key raw str
 ## [0.1.0] - 2024-11-27
+
+### 🚀 Features
+
+- 🎸 init 0.1.0
 
 ### 💼 Other
 
-- 🎸 init 0.1.0
 - Create rust.yml
 
 ci in github
-- 💍 remove filesystem in test
-- 💄 remove some ref
+- Create dependabot.yml
+- Update dependabot.yml
+
+### 📚 Documentation
+
 - ✏️ improve docs
 - ✏️ Cargo.toml
 - ✏️ README
-- Create dependabot.yml
-- Update dependabot.yml
+
+### 🎨 Styling
+
+- 💄 remove some ref
+
+### 🧪 Testing
+
+- 💍 remove filesystem in test
