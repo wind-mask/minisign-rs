@@ -1,4 +1,4 @@
-use scrypt::password_hash::rand_core::{self, RngCore};
+use getrandom::rand_core::TryRng;
 
 use crate::{errors::Result, PublicKeyBox, SecretKeyBox};
 
@@ -46,10 +46,15 @@ fn generate_keypair<'a, 'b>(
     pk_comment: Option<&'a str>,
     sk_comment: Option<&'b str>,
 ) -> Result<(PublicKeyBox<'a>, SecretKeyBox<'b>)> {
-    let mut rng = rand_core::OsRng;
-    let kid: [u8; 8] = rng.next_u64().to_le_bytes();
-    let sign_key = ed25519_dalek::SigningKey::generate(&mut rng);
+    let mut rng = getrandom::SysRng;
+    let mut kid = [0u8; 8];
+    rng.try_fill_bytes(&mut kid)?;
+
+    let mut seed = [0u8; 32];
+    rng.try_fill_bytes(&mut seed)?;
+    let sign_key = ed25519_dalek::SigningKey::from_bytes(&seed);
     let verify_key = sign_key.verifying_key();
+
     let sk = SecretKeyBox::from_signing_key(sign_key, &kid, password, sk_comment)?;
     let pk = PublicKeyBox::from_verifying_key(verify_key, &kid, pk_comment)?;
     Ok((pk, sk))

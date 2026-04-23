@@ -1,4 +1,4 @@
-use scrypt::{errors::InvalidOutputLen, password_hash::rand_core};
+use scrypt::errors::InvalidOutputLen;
 
 /// Error kind for minisign-rs
 #[derive(Debug, Clone)]
@@ -47,10 +47,18 @@ impl SError {
         }
     }
 }
-impl From<rand_core::Error> for SError {
-    fn from(error: rand_core::Error) -> Self {
+// impl From<rand_core::Error> for SError {
+//     fn from(error: rand_core::Error) -> Self {
+//         Self {
+//             kind: ErrorKind::Kdf,
+//             error: Box::new(error),
+//         }
+//     }
+//
+impl From<getrandom::Error> for SError {
+    fn from(error: getrandom::Error) -> Self {
         Self {
-            kind: ErrorKind::Kdf,
+            kind: ErrorKind::Io,
             error: Box::new(error),
         }
     }

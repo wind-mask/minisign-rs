@@ -14,8 +14,9 @@ exclude=[".github/*"]
 [dependencies]
 base64 = "0.22.1"
 blake2 = "0.10.6"
-ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
-scrypt = "0.11.0"
+ed25519-dalek = { version = "2.1.1" }
+getrandom = { version = "0.4.2", features = ["sys_rng"] }
+scrypt = "0.12.0"
 zeroize = { version = "1.8.1", features = ["zeroize_derive"] }
 
 [profile.dev]

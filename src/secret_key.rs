@@ -13,7 +13,7 @@ use ed25519_dalek::{
     ed25519::{self, ComponentBytes},
     Signer,
 };
-use scrypt::password_hash::rand_core::{self, RngCore};
+use getrandom::rand_core::TryRng;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A `SecretKeyBox` represents a minisign secret key.
@@ -23,7 +23,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 pub struct SecretKeyBox<'s> {
     #[zeroize(skip)]
     pub(crate) untrusted_comment: Option<&'s str>,
-     secret_key: SecretKey,
+    secret_key: SecretKey,
 }
 impl Display for SecretKeyBox<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,7 +71,7 @@ impl<'s> SecretKeyBox<'s> {
         let sk = signing_key.to_bytes();
         let pk = signing_key.verifying_key().to_bytes();
         let mut dest = [0u8; KDF_SALT_SIZE];
-        rand_core::OsRng.try_fill_bytes(&mut dest)?;
+        getrandom::SysRng.try_fill_bytes(&mut dest)?;
 
         let mut hash = Blake2b256::new();
         hash.update(KEY_SIG_ALG);

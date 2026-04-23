@@ -110,11 +110,7 @@ fn test_parse_signature() {
     assert_eq!(file, sig.to_string());
 }
 fn sanitize_comment(comment: Option<&str>) -> Option<String> {
-    comment.map(|c| {
-        c.chars()
-            .filter(|c| !c.is_control())
-            .collect::<String>()
-    })
+    comment.map(|c| c.chars().filter(|c| !c.is_control()).collect::<String>())
 }
 impl Display for SignatureBox<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

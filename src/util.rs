@@ -29,5 +29,5 @@ pub fn raw_scrypt_params(memlimit: usize, opslimit: u64, n_log2_max: u8) -> Resu
     if n_log2 > n_log2_max {
         return Err(SError::new(ErrorKind::Kdf, "scrypt parameters too high"));
     }
-    scrypt::Params::new(n_log2, r, p, scrypt::Params::RECOMMENDED_LEN).map_err(Into::into)
+    scrypt::Params::new(n_log2, r, p).map_err(Into::into)
 }
