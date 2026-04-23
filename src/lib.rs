@@ -19,6 +19,7 @@ mod signature;
 pub use signature::SignatureBox;
 
 use crate::public_key::verify_prehashed;
+use crate::util::validate_comment;
 mod util;
 fn prehash<R>(data_reader: &mut R) -> Result<Vec<u8>>
 where
@@ -51,15 +52,14 @@ pub fn pub_key_from_sec_key<'s>(
     password: Option<&[u8]>,
 ) -> Result<PublicKeyBox<'s>> {
     let keynum_sk = sec_key.xor_keynum_sk(password)?;
-    let pk_box = PublicKeyBox::new(
+    PublicKeyBox::new(
         None,
         PublicKey::new(
             sec_key.sig_alg(),
             keynum_sk.key_id,
             RawPk(keynum_sk.pub_key),
         ),
-    );
-    Ok(pk_box)
+    )
 }
 
 /// minisign some data
@@ -87,6 +87,8 @@ pub fn sign<'a, R>(
 where
     R: Read,
 {
+    validate_comment(trusted_comment, ErrorKind::SignatureError)?;
+    validate_comment(untrusted_comment, ErrorKind::SignatureError)?;
     let prehashed = prehash(&mut data_reader)?;
     let sig = sk.sign(&prehashed, password)?;
     let mut global_data = sig.to_bytes().to_vec();
@@ -94,7 +96,7 @@ where
     let global_sig = sk.sign(&global_data, password)?;
     let keynum_sk = sk.xor_keynum_sk(password)?;
     let signature = Signature::new(SIGALG_PREHASHED, keynum_sk.key_id, sig, global_sig);
-    let sig_box = SignatureBox::new(untrusted_comment, trusted_comment, signature);
+    let sig_box = SignatureBox::new(untrusted_comment, trusted_comment, signature)?;
     if let Some(pk) = pk {
         verify_prehashed(pk, &sig_box, &prehashed)?;
     }
@@ -148,6 +150,32 @@ mod tests {
         )
         .unwrap();
         let v = verify(&public_key_box, &sig_box, msg.as_bytes()).unwrap();
-        assert_eq!(v, true);
+        assert!(v);
+    }
+    #[test]
+    fn test_sign_rejects_comment_control_characters() {
+        let KeyPairBox {
+            public_key_box,
+            secret_key_box,
+        } = KeyPairBox::generate(Some(b"password"), None, None).unwrap();
+
+        assert!(sign(
+            Some(&public_key_box),
+            &secret_key_box,
+            Some(b"password"),
+            "test".as_bytes(),
+            Some("trusted\ncomment"),
+            Some("untrusted comment"),
+        )
+        .is_err());
+        assert!(sign(
+            Some(&public_key_box),
+            &secret_key_box,
+            Some(b"password"),
+            "test".as_bytes(),
+            Some("trusted comment"),
+            Some("untrusted\0comment"),
+        )
+        .is_err());
     }
 }

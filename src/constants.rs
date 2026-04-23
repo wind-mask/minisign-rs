@@ -3,6 +3,7 @@ pub(crate) const ALG_SIZE: usize = 2;
 pub(crate) const KDF_LIMIT_SIZE: usize = 8;
 pub(crate) const CHK_SIZE: usize = 32;
 pub(crate) const KDF_ALG: [u8; 2] = *b"Sc";
+pub(crate) const KDF_ALG_NONE: [u8; 2] = [0, 0];
 pub(crate) const KDF_SALT_SIZE: usize = 32;
 pub(crate) const KID_SIZE: usize = 8;
 pub(crate) const N_LOG2_MAX: u8 = 20;

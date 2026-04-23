@@ -2,10 +2,10 @@ use std::fmt::Display;
 
 use crate::{
     public_key::{PublicKey, RawPk},
-    util::raw_scrypt_params,
-    PublicKeyBox, Result, SError, ALG_SIZE, CHK_ALG, CHK_SIZE, COMPONENT_SIZE, KDF_ALG,
-    KDF_LIMIT_SIZE, KDF_SALT_SIZE, KEYNUM_SK_SIZE, KEY_SIG_ALG, KID_SIZE, MEMLIMIT, N_LOG2_MAX,
-    OPSLIMIT,
+    util::{raw_scrypt_params, validate_comment},
+    ErrorKind, PublicKeyBox, Result, SError, ALG_SIZE, CHK_ALG, CHK_SIZE, COMPONENT_SIZE, KDF_ALG,
+    KDF_ALG_NONE, KDF_LIMIT_SIZE, KDF_SALT_SIZE, KEYNUM_SK_SIZE, KEY_SIG_ALG, KID_SIZE, MEMLIMIT,
+    N_LOG2_MAX, OPSLIMIT,
 };
 use base64::Engine;
 use blake2::{Blake2b, Digest};
@@ -53,11 +53,12 @@ impl Display for SecretKeyBox<'_> {
 }
 type Blake2b256 = Blake2b<blake2::digest::consts::U32>;
 impl<'s> SecretKeyBox<'s> {
-    fn new(untrusted_comment: Option<&'s str>, secret_key: SecretKey) -> Self {
-        Self {
+    fn new(untrusted_comment: Option<&'s str>, secret_key: SecretKey) -> Result<Self> {
+        validate_comment(untrusted_comment, ErrorKind::SecretKey)?;
+        Ok(Self {
             untrusted_comment,
             secret_key,
-        }
+        })
     }
     pub(crate) fn sig_alg(&self) -> [u8; ALG_SIZE] {
         self.secret_key.sig_alg
@@ -70,33 +71,51 @@ impl<'s> SecretKeyBox<'s> {
     ) -> Result<Self> {
         let sk = signing_key.to_bytes();
         let pk = signing_key.verifying_key().to_bytes();
-        let mut dest = [0u8; KDF_SALT_SIZE];
-        getrandom::SysRng.try_fill_bytes(&mut dest)?;
-
-        let mut hash = Blake2b256::new();
-        hash.update(KEY_SIG_ALG);
-        hash.update(kid);
-        hash.update(sk);
-        hash.update(pk);
-        let mut kdf_buf = kdf(password, &dest, OPSLIMIT, MEMLIMIT)?;
+        let (kdf_alg, kdf_salt, kdf_opslimit, kdf_memlimit, mut kdf_buf, checksum) =
+            if let Some(password) = password {
+                let mut kdf_salt = [0u8; KDF_SALT_SIZE];
+                getrandom::SysRng.try_fill_bytes(&mut kdf_salt)?;
+                let mut hash = Blake2b256::new();
+                hash.update(KEY_SIG_ALG);
+                hash.update(kid);
+                hash.update(sk);
+                hash.update(pk);
+                (
+                    KDF_ALG,
+                    kdf_salt,
+                    OPSLIMIT,
+                    MEMLIMIT,
+                    kdf(Some(password), &kdf_salt, OPSLIMIT, MEMLIMIT)?,
+                    hash.finalize().to_vec().try_into().unwrap(),
+                )
+            } else {
+                (
+                    KDF_ALG_NONE,
+                    [0u8; KDF_SALT_SIZE],
+                    0,
+                    0,
+                    [0u8; KEYNUM_SK_SIZE],
+                    [0u8; CHK_SIZE],
+                )
+            };
         let keynum_sk = KeynumSK {
             key_id: *kid,
             sec_key: RawSk(sk),
             pub_key: pk,
-            checksum: hash.finalize().to_vec().try_into().unwrap(),
+            checksum,
         };
         kdf_buf = keynum_sk.to_bytes(kdf_buf);
         let secret_key = SecretKey {
             sig_alg: KEY_SIG_ALG,
-            kdf_alg: KDF_ALG,
+            kdf_alg,
             cksum_alg: CHK_ALG,
-            kdf_salt: dest,
-            kdf_opslimit: OPSLIMIT,
-            kdf_memlimit: MEMLIMIT,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
             keynum_sk: kdf_buf,
         };
         kdf_buf.zeroize();
-        Ok(Self::new(untrusted_comment, secret_key))
+        Self::new(untrusted_comment, secret_key)
     }
     pub(crate) fn sign(
         &self,
@@ -165,7 +184,7 @@ impl<'s> SecretKeyBox<'s> {
                 .unwrap(),
         };
         sk_format.zeroize();
-        Ok(SecretKeyBox::new(None, secret_key))
+        SecretKeyBox::new(None, secret_key)
     }
     /// Parse a `SecretKeyBox` from str.
     ///
@@ -196,7 +215,7 @@ fn pub_key_from_sec_key<'s>(
             RawPk(keynum_sk.pub_key),
         ),
     );
-    Ok(pk_box)
+    pk_box
 }
 
 fn parse_raw_secret_key(secret_key: &str) -> Result<SecretKey> {
@@ -253,21 +272,22 @@ fn parse_raw_secret_key(secret_key: &str) -> Result<SecretKey> {
 }
 fn parse_secret_key(s: &str) -> Result<SecretKeyBox<'_>> {
     let mut lines = s.lines();
-    if let Some(c) = lines.next() {
-        let untrusted_comment = c.strip_prefix("untrusted comment: ");
-        let secret_key = lines
-            .next()
-            .ok_or_else(|| SError::new(crate::ErrorKind::SecretKey, "missing secret key"))?;
-        Ok(SecretKeyBox::new(
-            untrusted_comment,
-            parse_raw_secret_key(secret_key)?,
-        ))
-    } else {
-        Err(SError::new(
+    let untrusted_comment = lines
+        .next()
+        .ok_or_else(|| SError::new(crate::ErrorKind::SecretKey, "missing untrusted comment"))?
+        .strip_prefix("untrusted comment: ")
+        .ok_or_else(|| SError::new(crate::ErrorKind::SecretKey, "missing untrusted comment"))?;
+    validate_comment(Some(untrusted_comment), ErrorKind::SecretKey)?;
+    let secret_key = lines
+        .next()
+        .ok_or_else(|| SError::new(crate::ErrorKind::SecretKey, "missing secret key"))?;
+    if lines.next().is_some() {
+        return Err(SError::new(
             crate::ErrorKind::SecretKey,
-            "missing untrusted comment",
-        ))
+            "unexpected extra data",
+        ));
     }
+    SecretKeyBox::new(Some(untrusted_comment), parse_raw_secret_key(secret_key)?)
 }
 
 #[cfg(test)]
@@ -279,6 +299,41 @@ fn test_parse_secret_key() {
     let file = k.secret_key_box.to_string();
     let sk = parse_secret_key(&file).unwrap();
     assert_eq!(file, sk.to_string());
+}
+#[cfg(test)]
+#[test]
+fn test_parse_secret_key_rejects_extra_lines() {
+    use crate::KeyPairBox;
+
+    let keypair = KeyPairBox::generate(Some(b"password"), None, None).unwrap();
+    let file = format!("{}extra\n", keypair.secret_key_box);
+
+    assert!(parse_secret_key(&file).is_err());
+}
+#[cfg(test)]
+#[test]
+fn test_parse_secret_key_requires_comment_prefix() {
+    use crate::KeyPairBox;
+
+    let keypair = KeyPairBox::generate(Some(b"password"), None, None).unwrap();
+    let secret_key = keypair
+        .secret_key_box
+        .to_string()
+        .lines()
+        .nth(1)
+        .unwrap()
+        .to_owned();
+    let malformed = format!("bad comment\n{secret_key}\n");
+
+    assert!(parse_secret_key(&malformed).is_err());
+}
+#[cfg(test)]
+#[test]
+fn test_generate_rejects_comment_control_characters() {
+    use crate::KeyPairBox;
+
+    assert!(KeyPairBox::generate(Some(b"password"), Some("bad\ncomment"), None).is_err());
+    assert!(KeyPairBox::generate(Some(b"password"), None, Some("bad\0comment")).is_err());
 }
 /// A `SecretKey` is used to sign messages.
 #[derive(Clone, Debug, ZeroizeOnDrop, PartialEq, Eq)]
@@ -359,14 +414,60 @@ impl SecretKey {
         Ok(keynum_sk?.sec_key.sign(message))
     }
     pub(crate) fn xor_keynum_sk(&self, password: Option<&[u8]>) -> Result<KeynumSK> {
-        let stream = kdf(
-            password,
-            &self.kdf_salt,
-            self.kdf_opslimit,
-            self.kdf_memlimit,
-        )?;
+        if self.sig_alg != KEY_SIG_ALG {
+            return Err(SError::new(
+                crate::ErrorKind::SecretKey,
+                "invalid secret key signature algorithm",
+            ));
+        }
+        if self.cksum_alg != CHK_ALG {
+            return Err(SError::new(
+                crate::ErrorKind::SecretKey,
+                "invalid secret key checksum algorithm",
+            ));
+        }
+        let stream = if self.kdf_alg == KDF_ALG {
+            kdf(
+                password,
+                &self.kdf_salt,
+                self.kdf_opslimit,
+                self.kdf_memlimit,
+            )?
+        } else if self.kdf_alg == KDF_ALG_NONE {
+            if password.is_some_and(|password| !password.is_empty()) {
+                return Err(SError::new(
+                    crate::ErrorKind::SecretKey,
+                    "secret key is not encrypted",
+                ));
+            }
+            [0u8; KEYNUM_SK_SIZE]
+        } else {
+            return Err(SError::new(
+                crate::ErrorKind::SecretKey,
+                "invalid secret key kdf algorithm",
+            ));
+        };
 
         let keynum_sk = KeynumSK::from_bytes(&self.keynum_sk, stream);
+
+        if self.kdf_alg == KDF_ALG_NONE {
+            if keynum_sk.checksum != [0u8; CHK_SIZE] {
+                return Err(SError::new(
+                    crate::ErrorKind::SecretKey,
+                    "invalid unencrypted secret key checksum",
+                ));
+            }
+            let public_key = ed25519_dalek::SigningKey::from_bytes(&keynum_sk.sec_key.0)
+                .verifying_key()
+                .to_bytes();
+            if public_key != keynum_sk.pub_key {
+                return Err(SError::new(
+                    crate::ErrorKind::SecretKey,
+                    "secret key public key mismatch",
+                ));
+            }
+            return Ok(keynum_sk);
+        }
 
         let mut hash = Blake2b256::new();
         hash.update(self.sig_alg);
@@ -394,5 +495,5 @@ fn test_sign() {
     let sig = sk.sign(msg, Some(password)).unwrap();
     let pk = pub_key_from_sec_key(&sk, Some(password)).unwrap();
     let v = pk.public_key.key.verify(msg, &sig);
-    assert_eq!(v.unwrap(), true);
+    assert!(v.unwrap());
 }

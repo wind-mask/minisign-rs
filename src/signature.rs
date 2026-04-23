@@ -5,7 +5,8 @@ use base64::Engine;
 use ed25519_dalek::ed25519;
 
 use crate::errors::Result;
-use crate::{SError, ALG_SIZE, KID_SIZE, SIGALG_PREHASHED, SIG_SIZE};
+use crate::util::validate_comment;
+use crate::{ErrorKind, SError, ALG_SIZE, KID_SIZE, SIGALG_PREHASHED, SIG_SIZE};
 /// A `SignatureBox` represents a minisign signature.
 ///
 /// also can be output to a string and parse from a str.
@@ -22,18 +23,22 @@ pub struct SignatureBox<'s> {
 }
 fn parse_signature(s: &'_ str) -> Result<SignatureBox<'_>> {
     let mut lines = s.lines();
-    let untrusted_comment = if let Some(c) = lines.next() {
-        if let Some(uc) = c.strip_prefix("untrusted comment: ") {
-            Some(uc)
-        } else {
-            return Err(SError::new(
+    let untrusted_comment = lines
+        .next()
+        .ok_or_else(|| {
+            SError::new(
                 crate::ErrorKind::SignatureError,
                 "missing untrusted comment",
-            ));
-        }
-    } else {
-        None
-    };
+            )
+        })?
+        .strip_prefix("untrusted comment: ")
+        .ok_or_else(|| {
+            SError::new(
+                crate::ErrorKind::SignatureError,
+                "missing untrusted comment",
+            )
+        })?;
+    validate_comment(Some(untrusted_comment), ErrorKind::SignatureError)?;
     let sig = lines
         .next()
         .ok_or_else(|| SError::new(crate::ErrorKind::SignatureError, "missing signature"))?;
@@ -50,24 +55,21 @@ fn parse_signature(s: &'_ str) -> Result<SignatureBox<'_>> {
     let sig_alg = &sig_format[..ALG_SIZE];
     let key_id = &sig_format[ALG_SIZE..ALG_SIZE + KID_SIZE];
     let sig = &sig_format[ALG_SIZE + KID_SIZE..];
-    let trusted_comment = if let Some(c) = lines.next() {
-        if let Some(tc) = c.strip_prefix("trusted comment: ") {
-            Some(tc)
-        } else {
-            return Err(SError::new(
-                crate::ErrorKind::SignatureError,
-                "missing trusted comment",
-            ));
-        }
-    } else {
-        return Err(SError::new(
-            crate::ErrorKind::SignatureError,
-            "missing trusted comment",
-        ));
-    };
+    let trusted_comment = lines
+        .next()
+        .ok_or_else(|| SError::new(crate::ErrorKind::SignatureError, "missing trusted comment"))?
+        .strip_prefix("trusted comment: ")
+        .ok_or_else(|| SError::new(crate::ErrorKind::SignatureError, "missing trusted comment"))?;
+    validate_comment(Some(trusted_comment), ErrorKind::SignatureError)?;
     let global_sig = lines
         .next()
         .ok_or_else(|| SError::new(crate::ErrorKind::SignatureError, "missing global signature"))?;
+    if lines.next().is_some() {
+        return Err(SError::new(
+            crate::ErrorKind::SignatureError,
+            "unexpected extra data",
+        ));
+    }
     let global_sig_format = decoder
         .decode(global_sig.as_bytes())
         .map_err(|e| SError::new(crate::ErrorKind::SignatureError, e))?;
@@ -77,16 +79,16 @@ fn parse_signature(s: &'_ str) -> Result<SignatureBox<'_>> {
             "invalid global signature length",
         ));
     }
-    Ok(SignatureBox::new(
-        untrusted_comment,
-        trusted_comment,
+    SignatureBox::new(
+        Some(untrusted_comment),
+        Some(trusted_comment),
         Signature::new(
             sig_alg.try_into().unwrap(),
             key_id.try_into().unwrap(),
             sig.try_into().unwrap(),
             ed25519::Signature::from_bytes(&global_sig_format.try_into().unwrap()),
         ),
-    ))
+    )
 }
 
 #[cfg(test)]
@@ -109,15 +111,58 @@ fn test_parse_signature() {
     let sig = parse_signature(&file).unwrap();
     assert_eq!(file, sig.to_string());
 }
-fn sanitize_comment(comment: Option<&str>) -> Option<String> {
-    comment.map(|c| c.chars().filter(|c| !c.is_control()).collect::<String>())
+#[cfg(test)]
+#[test]
+fn test_parse_signature_rejects_extra_lines() {
+    use crate::{sign, KeyPairBox};
+
+    let password = b"password";
+    let keypair = KeyPairBox::generate(Some(password), None, None).unwrap();
+    let file = format!(
+        "{}extra\n",
+        sign(
+            Some(&keypair.public_key_box),
+            &keypair.secret_key_box,
+            Some(password),
+            "test".as_bytes(),
+            Some("trusted comment"),
+            Some("untrusted comment"),
+        )
+        .unwrap()
+    );
+
+    assert!(parse_signature(&file).is_err());
+}
+#[cfg(test)]
+#[test]
+fn test_parse_signature_rejects_control_char_comments() {
+    use crate::{sign, KeyPairBox};
+
+    let password = b"password";
+    let keypair = KeyPairBox::generate(Some(password), None, None).unwrap();
+    let file = sign(
+        Some(&keypair.public_key_box),
+        &keypair.secret_key_box,
+        Some(password),
+        "test".as_bytes(),
+        Some("trusted comment"),
+        Some("untrusted comment"),
+    )
+    .unwrap()
+    .to_string()
+    .replace(
+        "trusted comment: trusted comment",
+        "trusted comment: trusted\0comment",
+    );
+
+    assert!(parse_signature(&file).is_err());
 }
 impl Display for SignatureBox<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();
         s.push_str("untrusted comment: ");
-        if let Some(c) = sanitize_comment(self.untrusted_comment) {
-            s.push_str(&c);
+        if let Some(c) = self.untrusted_comment {
+            s.push_str(c);
         }
         s.push('\n');
         let encoder = base64::engine::general_purpose::STANDARD;
@@ -129,8 +174,8 @@ impl Display for SignatureBox<'_> {
         s.push_str(&sig);
         s.push('\n');
         s.push_str("trusted comment: ");
-        if let Some(c) = sanitize_comment(self.trusted_comment) {
-            s.push_str(&c);
+        if let Some(c) = self.trusted_comment {
+            s.push_str(c);
         }
         s.push('\n');
         let global_sig = encoder.encode(self.signature.global_sig.to_bytes());
@@ -145,12 +190,14 @@ impl<'s> SignatureBox<'s> {
         untrusted_comment: Option<&'s str>,
         trusted_comment: Option<&'s str>,
         signature: Signature,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        validate_comment(untrusted_comment, ErrorKind::SignatureError)?;
+        validate_comment(trusted_comment, ErrorKind::SignatureError)?;
+        Ok(Self {
             untrusted_comment,
             trusted_comment,
             signature,
-        }
+        })
     }
     pub fn is_prehashed(&self) -> bool {
         self.signature.sig_alg == SIGALG_PREHASHED

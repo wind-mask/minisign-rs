@@ -1,6 +1,14 @@
 use std::cmp;
 
 use crate::{errors::Result, ErrorKind, SError};
+pub(crate) fn validate_comment(comment: Option<&str>, kind: ErrorKind) -> Result<()> {
+    if let Some(comment) = comment {
+        if comment.chars().any(char::is_control) {
+            return Err(SError::new(kind, "comment contains control characters"));
+        }
+    }
+    Ok(())
+}
 pub fn raw_scrypt_params(memlimit: usize, opslimit: u64, n_log2_max: u8) -> Result<scrypt::Params> {
     let opslimit = cmp::max(32768, opslimit);
     let mut n_log2 = 1u8;

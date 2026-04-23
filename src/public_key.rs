@@ -1,8 +1,8 @@
 use std::{fmt::Display, io::Read};
 
 use crate::{
-    errors::Result, prehash, signature::Signature, ErrorKind, SError, SignatureBox, ALG_SIZE,
-    COMPONENT_SIZE, KEY_SIG_ALG, KID_SIZE,
+    errors::Result, prehash, signature::Signature, util::validate_comment, ErrorKind, SError,
+    SignatureBox, ALG_SIZE, COMPONENT_SIZE, KEY_SIG_ALG, KID_SIZE,
 };
 use base64::Engine;
 use ed25519_dalek::ed25519::{self, ComponentBytes};
@@ -16,11 +16,12 @@ pub struct PublicKeyBox<'s> {
 }
 
 impl<'s> PublicKeyBox<'s> {
-    pub(crate) fn new(untrusted_comment: Option<&'s str>, public_key: PublicKey) -> Self {
-        Self {
+    pub(crate) fn new(untrusted_comment: Option<&'s str>, public_key: PublicKey) -> Result<Self> {
+        validate_comment(untrusted_comment, ErrorKind::PublicKey)?;
+        Ok(Self {
             untrusted_comment,
             public_key,
-        }
+        })
     }
     pub fn from_verifying_key(
         key: ed25519_dalek::VerifyingKey,
@@ -29,7 +30,7 @@ impl<'s> PublicKeyBox<'s> {
     ) -> Result<Self> {
         let pk = RawPk::new(key.to_bytes());
         let public_key = PublicKey::new(KEY_SIG_ALG, *key_id, pk);
-        Ok(Self::new(untrusted_comment, public_key))
+        Self::new(untrusted_comment, public_key)
     }
     /// Parse a `PublicKeyBox` from str.
     ///
@@ -61,7 +62,7 @@ impl<'s> PublicKeyBox<'s> {
             pk_key_id.try_into().unwrap(),
             pk,
         );
-        Ok(PublicKeyBox::new(None, public_key))
+        PublicKeyBox::new(None, public_key)
     }
     /// Get the untrusted comment.
     pub fn untrusted_comment(&self) -> Option<&'s str> {
@@ -199,18 +200,22 @@ fn parse_raw_public_key(public_key: &str) -> Result<PublicKey> {
 }
 fn parse_public_key(s: &str) -> Result<PublicKeyBox<'_>> {
     let mut lines = s.lines();
-    if let Some(c) = lines.next() {
-        let untrusted_comment = c.strip_prefix("untrusted comment: ");
-        let public_key = lines
-            .next()
-            .ok_or_else(|| SError::new(crate::ErrorKind::PublicKey, "missing public key"))?;
-        Ok(PublicKeyBox::new(
-            untrusted_comment,
-            parse_raw_public_key(public_key)?,
-        ))
-    } else {
-        Err(SError::new(crate::ErrorKind::PublicKey, "empty public key"))
+    let untrusted_comment = lines
+        .next()
+        .ok_or_else(|| SError::new(crate::ErrorKind::PublicKey, "empty public key"))?
+        .strip_prefix("untrusted comment: ")
+        .ok_or_else(|| SError::new(crate::ErrorKind::PublicKey, "missing untrusted comment"))?;
+    validate_comment(Some(untrusted_comment), ErrorKind::PublicKey)?;
+    let public_key = lines
+        .next()
+        .ok_or_else(|| SError::new(crate::ErrorKind::PublicKey, "missing public key"))?;
+    if lines.next().is_some() {
+        return Err(SError::new(
+            crate::ErrorKind::PublicKey,
+            "unexpected extra data",
+        ));
     }
+    PublicKeyBox::new(Some(untrusted_comment), parse_raw_public_key(public_key)?)
 }
 #[cfg(test)]
 #[test]
@@ -221,6 +226,48 @@ fn test_parse_public_key() {
     let file = k.public_key_box.to_string();
     let pk = parse_public_key(&file).unwrap();
     assert_eq!(file, pk.to_string());
+}
+#[cfg(test)]
+#[test]
+fn test_parse_public_key_rejects_injected_comment() {
+    use crate::KeyPairBox;
+
+    let victim = KeyPairBox::generate(Some(b"victim"), None, None).unwrap();
+    let attacker = KeyPairBox::generate(Some(b"attacker"), None, None).unwrap();
+    let victim_raw = victim
+        .public_key_box
+        .to_string()
+        .lines()
+        .nth(1)
+        .unwrap()
+        .to_owned();
+    let attacker_raw = attacker
+        .public_key_box
+        .to_string()
+        .lines()
+        .nth(1)
+        .unwrap()
+        .to_owned();
+    let injected = format!("untrusted comment: comment\n{attacker_raw}\n{victim_raw}\n");
+
+    assert!(parse_public_key(&injected).is_err());
+}
+#[cfg(test)]
+#[test]
+fn test_parse_public_key_requires_comment_prefix() {
+    use crate::KeyPairBox;
+
+    let keypair = KeyPairBox::generate(Some(b"password"), None, None).unwrap();
+    let public_key = keypair
+        .public_key_box
+        .to_string()
+        .lines()
+        .nth(1)
+        .unwrap()
+        .to_owned();
+    let malformed = format!("bad comment\n{public_key}\n");
+
+    assert!(parse_public_key(&malformed).is_err());
 }
 /// A `PublicKey` is used to verify signatures.
 #[derive(Clone, Debug, PartialEq, Eq)]
