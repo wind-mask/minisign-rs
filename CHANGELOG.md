@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.5] - 2026-04-24
+
+### 🐛 Bug Fixes
+
+- Address security audit findings
+
 ## [0.1.4] - 2026-04-23
 
 ### 🐛 Bug Fixes
