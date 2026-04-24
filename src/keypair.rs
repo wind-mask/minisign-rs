@@ -1,4 +1,5 @@
 use getrandom::rand_core::TryRng;
+use zeroize::Zeroize;
 
 use crate::{errors::Result, PublicKeyBox, SecretKeyBox};
 
@@ -53,6 +54,7 @@ fn generate_keypair<'a, 'b>(
     let mut seed = [0u8; 32];
     rng.try_fill_bytes(&mut seed)?;
     let sign_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+    seed.zeroize();
     let verify_key = sign_key.verifying_key();
 
     let sk = SecretKeyBox::from_signing_key(sign_key, &kid, password, sk_comment)?;

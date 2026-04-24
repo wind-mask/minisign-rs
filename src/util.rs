@@ -1,6 +1,8 @@
 use std::cmp;
 
 use crate::{errors::Result, ErrorKind, SError};
+
+const P_MAX: u32 = 1024;
 pub(crate) fn validate_comment(comment: Option<&str>, kind: ErrorKind) -> Result<()> {
     if let Some(comment) = comment {
         if comment.chars().any(char::is_control) {
@@ -33,6 +35,9 @@ pub fn raw_scrypt_params(memlimit: usize, opslimit: u64, n_log2_max: u8) -> Resu
         }
         let maxrp = cmp::min(0x3fff_ffff_u32, ((opslimit / 4) / (1u64 << n_log2)) as u32);
         p = maxrp / r;
+    }
+    if p > P_MAX {
+        return Err(SError::new(ErrorKind::Kdf, "scrypt parameters too high"));
     }
     if n_log2 > n_log2_max {
         return Err(SError::new(ErrorKind::Kdf, "scrypt parameters too high"));

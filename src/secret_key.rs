@@ -14,6 +14,7 @@ use ed25519_dalek::{
     Signer,
 };
 use getrandom::rand_core::TryRng;
+use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A `SecretKeyBox` represents a minisign secret key.
@@ -437,7 +438,7 @@ impl SecretKey {
             if password.is_some_and(|password| !password.is_empty()) {
                 return Err(SError::new(
                     crate::ErrorKind::SecretKey,
-                    "secret key is not encrypted",
+                    "invalid secret key",
                 ));
             }
             [0u8; KEYNUM_SK_SIZE]
@@ -474,10 +475,11 @@ impl SecretKey {
         hash.update(&keynum_sk.key_id);
         hash.update(&keynum_sk.sec_key.0);
         hash.update(&keynum_sk.pub_key);
-        if hash.finalize().to_vec() != keynum_sk.checksum {
+        let hash_result = hash.finalize();
+        if bool::from(!hash_result.as_slice().ct_eq(&keynum_sk.checksum)) {
             return Err(SError::new(
                 crate::ErrorKind::SecretKey,
-                "checksum mismatch, invalid password",
+                "invalid secret key",
             ));
         }
         Ok(keynum_sk)

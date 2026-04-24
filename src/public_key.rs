@@ -77,7 +77,7 @@ impl<'s> PublicKeyBox<'s> {
         if !(self.public_key.key.verify(msg, &sig.sig)?) {
             return Err(SError::new(
                 crate::ErrorKind::PublicKey,
-                "verify sig failed",
+                "invalid signature",
             ));
         }
         let mut global_data = vec![];
@@ -86,7 +86,7 @@ impl<'s> PublicKeyBox<'s> {
         if !(self.public_key.key.verify(&global_data, &sig.global_sig)?) {
             return Err(SError::new(
                 crate::ErrorKind::PublicKey,
-                "verify global sig failed",
+                "invalid signature",
             ));
         }
         Ok(true)
