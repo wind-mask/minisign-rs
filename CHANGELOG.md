@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.6] - 2026-08-30
+
+### 💼 Other
+
+- *(cliff)* Fix cliff config
+
 ## [0.1.5] - 2026-04-24
 
 ### 🐛 Bug Fixes
